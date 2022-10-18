@@ -1,0 +1,21 @@
+Outlier filtering:
+- kmeans
+- better half
+
+Experimental investigation: (log book)
+- adding noise to particle cloud
+- visualizing sensor model function etc `self.sensor_model.predict(obs_range, map_range)` 
+  by plotting a graph of probabilities for various observation and prediction ranges
+- measuring overall location error over time
+- compare performance with AMCL implementation
+
+Document:
+- design choices
+- result of experimental analysis
+
+Additional features:
+- should be able to deal with "kidnapped robot"
+
+Optional task:
+- adaptive MCL (vary number of particles)
+- kalman filter-based localization
