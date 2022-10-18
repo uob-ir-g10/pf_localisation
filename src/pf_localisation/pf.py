@@ -119,9 +119,6 @@ class PFLocaliser(PFLocaliserBase):
 
         # Calculate mean for all points, throw away half that are furthest, and recalculate mean. Should be alright if points are not outrageously far away
         # as should be the case considering gaussian (= unlikely)
-
-        # AS of now I'm just calculating the mean using every single point so that's why it looks kinda unstable ig
-        # also can we fix z = 0 for the assignment?
         estimate = Pose()
 
         positions = list(map(lambda pose: pose.position, self.particlecloud.poses))
@@ -177,6 +174,6 @@ class PFLocaliser(PFLocaliserBase):
         noisy.orientation = rotateQuaternion(pose.orientation, gauss(0, self.SAMPLE_ROTATION_NOISE))
         noisy.position.x = gauss(pose.position.x, self.SAMPLE_TRANSLATION_NOISE) 
         noisy.position.y = gauss(pose.position.y, self.SAMPLE_TRANSLATION_NOISE) 
-        noisy.position.z = gauss(pose.position.z, self.SAMPLE_TRANSLATION_NOISE)
+        noisy.position.z = 0
         return noisy
             
