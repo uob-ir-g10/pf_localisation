@@ -92,33 +92,6 @@ class PFLocaliser(PFLocaliserBase):
             | (geometry_msgs.msg.Pose) robot's estimated pose.
         """
 
-
-        def to_iter(msg):
-            """
-            Convert ros msg object to iterator over it's slots
-            """
-            if hasattr(msg, '__iter__'):
-                for x in msg:
-                    yield x
-            else:
-                slots = msg.__slots__
-                for slot in slots:
-                    yield(getattr(msg, slot))
-
-
-        def get_mean(points):
-            mean = [0.0] * len(list(to_iter(points[0])))
-            for point in points:
-                for i, x in enumerate(to_iter(point)):
-                    mean[i] += x
-            for i in range(len(mean)):
-                mean[i] /= len(points)
-            return mean
-        
-        def get_distance_squared(p1, p2):
-            return sum(map(lambda a,b: (a-b)**2, to_iter(p1), to_iter(p2)))
-
-
         # Calculate mean for all points, throw away half that are furthest, and recalculate mean. Should be alright if points are not outrageously far away
         # as should be the case considering gaussian (= unlikely)
         estimate = Pose()
@@ -150,7 +123,7 @@ class PFLocaliser(PFLocaliserBase):
             distance = get_distance_squared(quat, ori_mean)
             distances.append((quat, distance))
         
-        # Sort poses in descending order based on distance to cluster center
+        # Sort orientations in descending order based on distance to cluster center
         distances.sort(key=lambda i: i[1], reverse=True)
         points = list(map(lambda x: x[0], distances[:len(distances)//2]))
         ori_mean_no_outliers = get_mean(points)
@@ -171,6 +144,8 @@ class PFLocaliser(PFLocaliserBase):
 
         :Args:
             | pose: the original pose
+            | rotation_noise: noise given to the rotation of the pose
+            | translation_noise: noise given to the translation of the pose
         :Return:
             | (geometry_msgs.msg.Pose) pose with added sampling noise
         """
@@ -181,3 +156,40 @@ class PFLocaliser(PFLocaliserBase):
         noisy.position.z = 0
         return noisy
             
+def to_iter(msg):
+    """
+    Convert a ros msg object into an iterator over its slots
+
+    :Args:
+        | msg: a ros msg object
+    :Return:
+        | a generator over the object's slots 
+    """
+    # Don't do anything if msg is already iterable
+    if hasattr(msg, '__iter__'):
+        for x in msg:
+            yield x
+    # Otherwise iterate over the msg's attributes
+    else:
+        slots = msg.__slots__
+        for slot in slots:
+            yield(getattr(msg, slot))
+
+
+def get_mean(points):
+    """
+    Returns the mean value of an array of `Pose`s/`Orientation`s
+    """
+    mean = [0.0] * len(list(to_iter(points[0])))
+    for point in points:
+        for i, x in enumerate(to_iter(point)):
+            mean[i] += x
+    for i in range(len(mean)):
+        mean[i] /= len(points)
+    return mean
+
+def get_distance_squared(p1, p2):
+    """
+    Get the distance squared between two `Pose`s/`Orientation`s
+    """
+    return sum(map(lambda a,b: (a-b)**2, to_iter(p1), to_iter(p2)))
