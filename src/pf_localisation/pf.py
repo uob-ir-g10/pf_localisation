@@ -69,11 +69,8 @@ class PFLocaliser(PFLocaliserBase):
         for particle in particles:
             weights.append(self.sensor_model.get_weight(scan, particle))
 
-        # Sample from the weighted list while adding resampling noise
-        self.particlecloud.poses.clear()
-        for i in range(self.NUMBER_PREDICTED_READINGS):
-            sample = choices(particles, weights=weights, k=1)[0]
-            self.particlecloud.poses.append(self.add_noise(sample))
+        # Sample from the weighted list while adding resampling noise        
+        self.particlecloud.poses = list(map(self.add_noise, choices(particles, weights=weights, k=self.NUMBER_PREDICTED_READINGS)))
 
     def estimate_pose(self):
         """
@@ -98,10 +95,12 @@ class PFLocaliser(PFLocaliserBase):
             Convert ros msg object to iterator over it's slots
             """
             if hasattr(msg, '__iter__'):
-                return msg.__iter__
-            slots = msg.__slots__
-            for slot in slots:
-                yield(getattr(msg, slot))
+                for x in msg:
+                    yield x
+            else:
+                slots = msg.__slots__
+                for slot in slots:
+                    yield(getattr(msg, slot))
 
 
         def get_mean(points):
@@ -125,39 +124,35 @@ class PFLocaliser(PFLocaliserBase):
         orientations = list(map(lambda pose: pose.orientation, self.particlecloud.poses))
 
 
+        # POSITION ESTIMATION
         pos_mean = get_mean(positions)
+        distances = []
+        for position in positions:
+            distance = get_distance_squared(position, pos_mean)
+            distances.append((position, distance))
+            
+        # Sort positions in descending order based on distance to cluster center
+        distances.sort(key=lambda i: i[1], reverse=True)
 
-        # rospy.loginfo(positions)
-        # distances = []
-        # for position in positions:
-        #     distance = get_distance_squared(position, pos_mean)
-        #     #distance = (position.x - pos_mean[0])**2 + (position.y - pos_mean[1])**2 + (position.z - pos_mean[2])**2
-        #     distances.append((position, distance))
-        # # Sort poses in descending order based on distance to cluster center
+        # Only keep the points closest to center
+        points = list(map(lambda x: x[0], distances[:len(distances)//2]))
+        pos_mean_no_outliers = get_mean(points)
 
-        # # all distances are 0 for some reason btw
-        # distances.sort(key=lambda i: i[1], reverse=True)
+        estimate.position = Point(*pos_mean_no_outliers)
 
-        # # Should remove the distances in the points array before calling get_mean as the mean becomes '[]'
-        # points = distances[:len(distances)//2]
-        # rospy.loginfo(points)
-        # pos_mean_no_outliers = get_mean(points)
-
-
-        # estimate.position = Point(*pos_mean_no_outliers)
-        estimate.position = Point(*pos_mean)
-
+        # ORIENTATION ESTIMATION
         ori_mean = get_mean(orientations)
-        # distances = []
-        # for quat in orientations:
-        #     distance = get_distance_squared(quat, ori_mean)
-        #     distances.append((quat, distance))
-        # distances.sort(key=lambda i: i[1], reverse=True)
-        # points = distances[:len(distances)//2]
-        # ori_mean_no_outliers = get_mean(points)
+        distances = []
+        for quat in orientations:
+            distance = get_distance_squared(quat, ori_mean)
+            distances.append((quat, distance))
+        
+        # Sort poses in descending order based on distance to cluster center
+        distances.sort(key=lambda i: i[1], reverse=True)
+        points = list(map(lambda x: x[0], distances[:len(distances)//2]))
+        ori_mean_no_outliers = get_mean(points)
 
-        # estimate.orientation = Quaternion(*ori_mean_no_outliers)
-        estimate.orientation = Quaternion(*ori_mean)
+        estimate.orientation = Quaternion(*ori_mean_no_outliers)
 
         return estimate
 
