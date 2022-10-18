@@ -4,7 +4,7 @@ import math
 import rospy
 
 from . util import rotateQuaternion, getHeading
-from random import gauss, choices
+from random import gauss, choices, random
 
 from time import time
 
@@ -30,6 +30,10 @@ class PFLocaliser(PFLocaliserBase):
 
         # ----- Sensor model parameters
         self.NUMBER_PREDICTED_READINGS = 20     # Number of readings to predict
+
+        # ----- Particle parameters
+        self.STANDARD_PARTICLES = 90   # Number of particles in particle cloud
+        self.KIDNAPPED_PARTICLES = 10       # Number of randomly generated particles to combat kidnapping
         
        
     def initialise_particle_cloud(self, initialpose):
@@ -49,9 +53,11 @@ class PFLocaliser(PFLocaliserBase):
         particle_cloud = PoseArray()
         if isinstance(initialpose, PoseWithCovarianceStamped):
             initialpose = initialpose.pose.pose
-        for i in range(self.NUMBER_PREDICTED_READINGS):
+        for i in range(self.STANDARD_PARTICLES):
             generated_particle = self.add_initial_noise(initialpose)            
             particle_cloud.poses.append(generated_particle)
+        for i in range(self.KIDNAPPED_PARTICLES):
+            particle_cloud.poses.append(self.get_random_particle())
 
         return particle_cloud
 
@@ -73,7 +79,10 @@ class PFLocaliser(PFLocaliserBase):
             weights.append(self.sensor_model.get_weight(scan, particle))
 
         # Sample from the weighted list while adding resampling noise        
-        self.particlecloud.poses = list(map(self.add_sample_noise, choices(particles, weights=weights, k=self.NUMBER_PREDICTED_READINGS)))
+        self.particlecloud.poses = list(map(self.add_sample_noise, choices(particles, weights=weights, k=self.STANDARD_PARTICLES)))
+        for i in range(self.KIDNAPPED_PARTICLES):
+            self.particlecloud.poses.append(self.get_random_particle())
+
 
     def estimate_pose(self):
         """
@@ -155,7 +164,18 @@ class PFLocaliser(PFLocaliserBase):
         noisy.position.y = gauss(pose.position.y, translation_noise) 
         noisy.position.z = 0
         return noisy
-            
+
+    def get_random_particle(self):
+        """
+        Return a random particle that's atleast on the map somewhere
+        """
+        p = Pose()
+        p.position.x = random() * self.occupancy_map.info.width * self.occupancy_map.info.resolution
+        p.position.y = random() * self.occupancy_map.info.height * self.occupancy_map.info.resolution
+        p.position.z = 0
+        p.orientation = rotateQuaternion(Quaternion(w=1.0), random() * 2 * math.pi)
+        return p
+
 def to_iter(msg):
     """
     Convert a ros msg object into an iterator over its slots
