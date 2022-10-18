@@ -22,8 +22,11 @@ class PFLocaliser(PFLocaliserBase):
         self.ODOM_TRANSLATION_NOISE = 0     # Odometry model x-axis (forward) noise
         self.ODOM_DRIFT_NOISE = 0           # Odometry model y-axis (side-to-side) noise
 
-        self.SAMPLE_ROTATION_NOISE = 0.1		
-        self.SAMPLE_TRANSLATION_NOISE = 0.1	
+        self.SAMPLE_ROTATION_NOISE = 0.05		
+        self.SAMPLE_TRANSLATION_NOISE = 0.025
+
+        self.INITIAL_ROTATION_NOISE = 0.25
+        self.INITIAL_TRANSLATION_NOISE = 0.2
 
         # ----- Sensor model parameters
         self.NUMBER_PREDICTED_READINGS = 20     # Number of readings to predict
@@ -47,7 +50,7 @@ class PFLocaliser(PFLocaliserBase):
         if isinstance(initialpose, PoseWithCovarianceStamped):
             initialpose = initialpose.pose.pose
         for i in range(self.NUMBER_PREDICTED_READINGS):
-            generated_particle = self.add_noise(initialpose)            
+            generated_particle = self.add_initial_noise(initialpose)            
             particle_cloud.poses.append(generated_particle)
 
         return particle_cloud
@@ -70,7 +73,7 @@ class PFLocaliser(PFLocaliserBase):
             weights.append(self.sensor_model.get_weight(scan, particle))
 
         # Sample from the weighted list while adding resampling noise        
-        self.particlecloud.poses = list(map(self.add_noise, choices(particles, weights=weights, k=self.NUMBER_PREDICTED_READINGS)))
+        self.particlecloud.poses = list(map(self.add_sample_noise, choices(particles, weights=weights, k=self.NUMBER_PREDICTED_READINGS)))
 
     def estimate_pose(self):
         """
@@ -156,7 +159,13 @@ class PFLocaliser(PFLocaliserBase):
 
         return estimate
 
-    def add_noise(self, pose: Pose):
+    def add_sample_noise(self, pose: Pose):
+        return self.add_noise(pose, rotation_noise=self.SAMPLE_ROTATION_NOISE, translation_noise=self.SAMPLE_TRANSLATION_NOISE)
+    
+    def add_initial_noise(self, pose: Pose):
+        return self.add_noise(pose, rotation_noise=self.INITIAL_ROTATION_NOISE, translation_noise=self.INITIAL_TRANSLATION_NOISE)
+
+    def add_noise(self, pose: Pose, rotation_noise, translation_noise):
         """
         Adds sampling noise to a particle
 
@@ -166,9 +175,9 @@ class PFLocaliser(PFLocaliserBase):
             | (geometry_msgs.msg.Pose) pose with added sampling noise
         """
         noisy = Pose()
-        noisy.orientation = rotateQuaternion(pose.orientation, gauss(0, self.SAMPLE_ROTATION_NOISE))
-        noisy.position.x = gauss(pose.position.x, self.SAMPLE_TRANSLATION_NOISE) 
-        noisy.position.y = gauss(pose.position.y, self.SAMPLE_TRANSLATION_NOISE) 
+        noisy.orientation = rotateQuaternion(pose.orientation, gauss(0, rotation_noise))
+        noisy.position.x = gauss(pose.position.x, translation_noise) 
+        noisy.position.y = gauss(pose.position.y, translation_noise) 
         noisy.position.z = 0
         return noisy
             
