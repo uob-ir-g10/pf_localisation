@@ -124,9 +124,11 @@ class PFLocaliser(PFLocaliserBase):
 
         if len(clustering.components_) > 0:
             estimate.position = Point(*[*clustering.components_[0], 0.0])
+            estimate.orientation = orientations[clustering.core_sample_indices_[0]]
         else:
             # If dbscan finds no cluster, need to find some point that works. Maybe at this point we increase # of random particles?
             estimate.position = Point(*[*positions[0], 0.0])
+            estimate.orientation = orientations[0]
 
         # Calculate mean for all points, throw away half that are furthest, and recalculate mean. Should be alright if points are not outrageously far away
         # as should be the case considering gaussian (= unlikely) but does get thrown off by extreme outliers
@@ -147,18 +149,18 @@ class PFLocaliser(PFLocaliserBase):
         #estimate.position = Point(*pos_mean_no_outliers)
 
         # ORIENTATION ESTIMATION
-        ori_mean = get_mean(orientations)
-        distances = []
-        for quat in orientations:
-            distance = get_distance_squared(quat, ori_mean)
-            distances.append((quat, distance))
+        # ori_mean = get_mean(orientations)
+        # distances = []
+        # for quat in orientations:
+        #     distance = get_distance_squared(quat, ori_mean)
+        #     distances.append((quat, distance))
         
-        # Sort orientations in descending order based on distance to cluster center
-        distances.sort(key=lambda i: i[1], reverse=True)
-        points = list(map(lambda x: x[0], distances[:len(distances)//2]))
-        ori_mean_no_outliers = get_mean(points)
+        # # Sort orientations in descending order based on distance to cluster center
+        # distances.sort(key=lambda i: i[1], reverse=True)
+        # points = list(map(lambda x: x[0], distances[:len(distances)//2]))
+        # ori_mean_no_outliers = get_mean(points)
 
-        estimate.orientation = Quaternion(*ori_mean_no_outliers)
+        # estimate.orientation = Quaternion(*ori_mean_no_outliers)
 
         return estimate
 
