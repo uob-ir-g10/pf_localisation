@@ -63,9 +63,7 @@ class PFLocaliser(PFLocaliserBase):
         for i in range(self.STANDARD_PARTICLES):
             generated_particle = self.add_initial_noise(initialpose)            
             particle_cloud.poses.append(generated_particle)
-        for i in range(self.KIDNAPPED_PARTICLES):
-            particle_cloud.poses.append(self.get_random_particle())
-
+        
         return particle_cloud
 
  
@@ -108,7 +106,6 @@ class PFLocaliser(PFLocaliserBase):
         :Return:
             | (geometry_msgs.msg.Pose) robot's estimated pose.
         """
-
         estimate = Pose()
 
         positions = list(map(lambda pose: [pose.position.x, pose.position.y], self.particlecloud.poses))
@@ -129,38 +126,6 @@ class PFLocaliser(PFLocaliserBase):
             # If dbscan finds no cluster, need to find some point that works. Maybe at this point we increase # of random particles?
             estimate.position = Point(*[*positions[0], 0.0])
             estimate.orientation = orientations[0]
-
-        # Calculate mean for all points, throw away half that are furthest, and recalculate mean. Should be alright if points are not outrageously far away
-        # as should be the case considering gaussian (= unlikely) but does get thrown off by extreme outliers
-        # POSITION ESTIMATION
-        # pos_mean = get_mean(positions)
-        # distances = []
-        # for position in positions:
-        #     distance = get_distance_squared(position, pos_mean)
-        #     distances.append((position, distance))
-            
-        # # Sort positions in descending order based on distance to cluster center
-        # distances.sort(key=lambda i: i[1], reverse=True)
-
-        # # Only keep the points closest to center
-        # points = list(map(lambda x: x[0], distances[:len(distances)//2]))
-        # pos_mean_no_outliers = get_mean(points)
-
-        #estimate.position = Point(*pos_mean_no_outliers)
-
-        # ORIENTATION ESTIMATION
-        # ori_mean = get_mean(orientations)
-        # distances = []
-        # for quat in orientations:
-        #     distance = get_distance_squared(quat, ori_mean)
-        #     distances.append((quat, distance))
-        
-        # # Sort orientations in descending order based on distance to cluster center
-        # distances.sort(key=lambda i: i[1], reverse=True)
-        # points = list(map(lambda x: x[0], distances[:len(distances)//2]))
-        # ori_mean_no_outliers = get_mean(points)
-
-        # estimate.orientation = Quaternion(*ori_mean_no_outliers)
 
         return estimate
 
@@ -231,9 +196,3 @@ def get_mean(points):
     for i in range(len(mean)):
         mean[i] /= len(points)
     return mean
-
-def get_distance_squared(p1, p2):
-    """
-    Get the distance squared between two `Pose`s/`Orientation`s
-    """
-    return sum(map(lambda a,b: (a-b)**2, to_iter(p1), to_iter(p2)))
