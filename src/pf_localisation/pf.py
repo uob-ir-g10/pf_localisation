@@ -1,10 +1,12 @@
+from tokenize import Pointfloat
 from geometry_msgs.msg import Pose, PoseArray, Quaternion, PoseWithCovarianceStamped, Point
 from . pf_base import PFLocaliserBase
 import math
 import rospy
 
 from . util import rotateQuaternion, getHeading
-from random import gauss, choices, random
+from random import gauss, choices, random, choice
+from sklearn.cluster import DBSCAN
 
 from time import time
 
@@ -32,8 +34,8 @@ class PFLocaliser(PFLocaliserBase):
         self.NUMBER_PREDICTED_READINGS = 20     # Number of readings to predict
 
         # ----- Particle parameters
-        self.STANDARD_PARTICLES = 90   # Number of particles in particle cloud
-        self.KIDNAPPED_PARTICLES = 10       # Number of randomly generated particles to combat kidnapping
+        self.STANDARD_PARTICLES = 60   # Number of particles in particle cloud
+        self.KIDNAPPED_PARTICLES = 20     # Number of randomly generated particles to combat kidnapping
         
        
     def initialise_particle_cloud(self, initialpose):
@@ -50,6 +52,10 @@ class PFLocaliser(PFLocaliserBase):
         :Return:
             | (geometry_msgs.msg.PoseArray) poses of the particles
         """
+        # Generate a list of possible indices where (random) particles can reside
+        self.possible_positions = [i for i, x in enumerate(self.occupancy_map.data) if x != -1 and x < 50]
+
+        # Generate the particle cloud
         particle_cloud = PoseArray()
         if isinstance(initialpose, PoseWithCovarianceStamped):
             initialpose = initialpose.pose.pose
@@ -80,6 +86,7 @@ class PFLocaliser(PFLocaliserBase):
 
         # Sample from the weighted list while adding resampling noise        
         self.particlecloud.poses = list(map(self.add_sample_noise, choices(particles, weights=weights, k=self.STANDARD_PARTICLES)))
+        # Add random particles to help with kidnapped robot problem
         for i in range(self.KIDNAPPED_PARTICLES):
             self.particlecloud.poses.append(self.get_random_particle())
 
@@ -105,25 +112,33 @@ class PFLocaliser(PFLocaliserBase):
         # as should be the case considering gaussian (= unlikely)
         estimate = Pose()
 
-        positions = list(map(lambda pose: pose.position, self.particlecloud.poses))
-        orientations = list(map(lambda pose: pose.orientation, self.particlecloud.poses))
+        positions = list(map(lambda pose: [pose.position.x, pose.position.y], self.particlecloud.poses[:self.STANDARD_PARTICLES]))
+        orientations = list(map(lambda pose: pose.orientation, self.particlecloud.poses[:self.STANDARD_PARTICLES]))
 
+        clustering = DBSCAN(
+            # max distance between two samples for one to be considered as in the neighbourhood of the other
+            eps=self.SAMPLE_TRANSLATION_NOISE*2, # 95% of standard particles are generated within 2 sigma
+            # number of samples in a nieghbourhood to be considerd a core point
+            min_samples=5
+        ).fit(positions)
+
+        estimate.position = Point(*[*clustering.components_[0], 0.0])
 
         # POSITION ESTIMATION
-        pos_mean = get_mean(positions)
-        distances = []
-        for position in positions:
-            distance = get_distance_squared(position, pos_mean)
-            distances.append((position, distance))
+        # pos_mean = get_mean(positions)
+        # distances = []
+        # for position in positions:
+        #     distance = get_distance_squared(position, pos_mean)
+        #     distances.append((position, distance))
             
-        # Sort positions in descending order based on distance to cluster center
-        distances.sort(key=lambda i: i[1], reverse=True)
+        # # Sort positions in descending order based on distance to cluster center
+        # distances.sort(key=lambda i: i[1], reverse=True)
 
-        # Only keep the points closest to center
-        points = list(map(lambda x: x[0], distances[:len(distances)//2]))
-        pos_mean_no_outliers = get_mean(points)
+        # # Only keep the points closest to center
+        # points = list(map(lambda x: x[0], distances[:len(distances)//2]))
+        # pos_mean_no_outliers = get_mean(points)
 
-        estimate.position = Point(*pos_mean_no_outliers)
+        #estimate.position = Point(*pos_mean_no_outliers)
 
         # ORIENTATION ESTIMATION
         ori_mean = get_mean(orientations)
@@ -169,9 +184,10 @@ class PFLocaliser(PFLocaliserBase):
         """
         Return a random particle that's atleast on the map somewhere
         """
+        position = choice(self.possible_positions)
         p = Pose()
-        p.position.x = random() * self.occupancy_map.info.width * self.occupancy_map.info.resolution
-        p.position.y = random() * self.occupancy_map.info.height * self.occupancy_map.info.resolution
+        p.position.x = position % self.occupancy_map.info.width * self.occupancy_map.info.resolution
+        p.position.y = position // self.occupancy_map.info.height * self.occupancy_map.info.resolution
         p.position.z = 0
         p.orientation = rotateQuaternion(Quaternion(w=1.0), random() * 2 * math.pi)
         return p
