@@ -34,11 +34,11 @@ class PFLocaliser(PFLocaliserBase):
         self.NUMBER_PREDICTED_READINGS = 20     # Number of readings to predict
 
         # ----- Particle parameters
-        self.STANDARD_PARTICLES = 60   # Number of particles in particle cloud
-        self.KIDNAPPED_PARTICLES = 20     # Number of randomly generated particles to combat kidnapping
+        self.STANDARD_PARTICLES = 100   # Number of particles in particle cloud
+        self.KIDNAPPED_PARTICLES = 100    # Number of randomly generated particles to combat kidnapping
 
         self.possible_positions = [] # list of indices of occupancy grid data[] that correspond to valid robot positions. recalculated each time occupancy map is recieved      
-       
+
     def initialise_particle_cloud(self, initialpose):
         """
         Set particle cloud to initialpose plus noise
@@ -85,8 +85,7 @@ class PFLocaliser(PFLocaliserBase):
         # Add random particles to help with kidnapped robot problem
         for i in range(self.KIDNAPPED_PARTICLES):
             particles.append(self.get_random_particle())
-        for particle in particles:
-            weights.append(self.sensor_model.get_weight(scan, particle))
+        weights = [self.sensor_model.get_weight(scan, particle) for particle in particles]
 
         # Sample from the weighted list while adding resampling noise        
         self.particlecloud.poses = list(map(self.add_sample_noise, choices(particles, weights=weights, k=self.STANDARD_PARTICLES)))
@@ -123,8 +122,9 @@ class PFLocaliser(PFLocaliserBase):
         ).fit(positions)
 
         if len(clustering.components_) > 0:
-            estimate.position = Point(*[*clustering.components_[0], 0.0])
-            estimate.orientation = orientations[clustering.core_sample_indices_[0]]
+            poses = [(positions[i], orientations[i]) for i,x in enumerate(clustering.labels_) if x == 0]
+            estimate.position = Point(*[*get_mean([pos for pos, ori in poses]), 0.0])
+            estimate.orientation = Quaternion(*get_mean([ori for pos, ori in poses]))
         else:
             # If dbscan finds no cluster, need to find some point that works. Maybe at this point we increase # of random particles?
             estimate.position = Point(*[*positions[0], 0.0])
