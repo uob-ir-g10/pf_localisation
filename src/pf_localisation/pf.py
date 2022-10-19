@@ -36,7 +36,8 @@ class PFLocaliser(PFLocaliserBase):
         # ----- Particle parameters
         self.STANDARD_PARTICLES = 60   # Number of particles in particle cloud
         self.KIDNAPPED_PARTICLES = 20     # Number of randomly generated particles to combat kidnapping
-        
+
+        self.possible_positions = [] # list of indices of occupancy grid data[] that correspond to valid robot positions. recalculated each time occupancy map is recieved      
        
     def initialise_particle_cloud(self, initialpose):
         """
@@ -81,14 +82,15 @@ class PFLocaliser(PFLocaliserBase):
         # Generate weighted list of particles
         weights = []
         particles = self.particlecloud.poses.copy()
+        # Add random particles to help with kidnapped robot problem
+        for i in range(self.KIDNAPPED_PARTICLES):
+            particles.append(self.get_random_particle())
         for particle in particles:
             weights.append(self.sensor_model.get_weight(scan, particle))
 
         # Sample from the weighted list while adding resampling noise        
         self.particlecloud.poses = list(map(self.add_sample_noise, choices(particles, weights=weights, k=self.STANDARD_PARTICLES)))
-        # Add random particles to help with kidnapped robot problem
-        for i in range(self.KIDNAPPED_PARTICLES):
-            self.particlecloud.poses.append(self.get_random_particle())
+        
 
 
     def estimate_pose(self):
@@ -108,12 +110,10 @@ class PFLocaliser(PFLocaliserBase):
             | (geometry_msgs.msg.Pose) robot's estimated pose.
         """
 
-        # Calculate mean for all points, throw away half that are furthest, and recalculate mean. Should be alright if points are not outrageously far away
-        # as should be the case considering gaussian (= unlikely)
         estimate = Pose()
 
-        positions = list(map(lambda pose: [pose.position.x, pose.position.y], self.particlecloud.poses[:self.STANDARD_PARTICLES]))
-        orientations = list(map(lambda pose: pose.orientation, self.particlecloud.poses[:self.STANDARD_PARTICLES]))
+        positions = list(map(lambda pose: [pose.position.x, pose.position.y], self.particlecloud.poses))
+        orientations = list(map(lambda pose: pose.orientation, self.particlecloud.poses))
 
         clustering = DBSCAN(
             # max distance between two samples for one to be considered as in the neighbourhood of the other
@@ -122,8 +122,14 @@ class PFLocaliser(PFLocaliserBase):
             min_samples=5
         ).fit(positions)
 
-        estimate.position = Point(*[*clustering.components_[0], 0.0])
+        if len(clustering.components_) > 0:
+            estimate.position = Point(*[*clustering.components_[0], 0.0])
+        else:
+            # If dbscan finds no cluster, need to find some point that works. Maybe at this point we increase # of random particles?
+            estimate.position = Point(*[*positions[0], 0.0])
 
+        # Calculate mean for all points, throw away half that are furthest, and recalculate mean. Should be alright if points are not outrageously far away
+        # as should be the case considering gaussian (= unlikely) but does get thrown off by extreme outliers
         # POSITION ESTIMATION
         # pos_mean = get_mean(positions)
         # distances = []
