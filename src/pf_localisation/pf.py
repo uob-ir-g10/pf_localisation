@@ -117,7 +117,7 @@ class PFLocaliser(PFLocaliserBase):
             # max distance between two samples for one to be considered as in the neighbourhood of the other
             eps=self.SAMPLE_TRANSLATION_NOISE*2, # 95% of standard particles are generated within 2 sigma
             # number of samples in a nieghbourhood to be considerd a core point
-            min_samples=5
+            min_samples=self.STANDARD_PARTICLES//10
         ).fit(positions)
 
         if len(clustering.components_) > 0:
