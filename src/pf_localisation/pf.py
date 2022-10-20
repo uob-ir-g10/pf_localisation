@@ -34,8 +34,10 @@ class PFLocaliser(PFLocaliserBase):
         self.NUMBER_PREDICTED_READINGS = 20     # Number of readings to predict
 
         # ----- Particle parameters
-        self.STANDARD_PARTICLES = 100   # Number of particles in particle cloud
-        self.KIDNAPPED_PARTICLES = 100    # Number of randomly generated particles to combat kidnapping
+        self.STANDARD_PARTICLES = 100           # Number of particles in particle cloud
+        self.KIDNAPPED_PARTICLES_LOW = 50       # Number of randomly generated particles to combat kidnapping
+        self.KIDNAPPED_PARTICLES_HIGH = 100
+        self.KIDNAPPED_PARTICLES = self.KIDNAPPED_PARTICLES_HIGH
 
         self.possible_positions = [] # list of indices of occupancy grid data[] that correspond to valid robot positions. recalculated each time occupancy map is recieved      
 
@@ -122,10 +124,12 @@ class PFLocaliser(PFLocaliserBase):
             poses = [(positions[i], orientations[i]) for i,x in enumerate(clustering.labels_) if x == 0]
             estimate.position = Point(*[*get_mean([pos for pos, ori in poses]), 0.0])
             estimate.orientation = Quaternion(*get_mean([ori for pos, ori in poses]))
+            self.KIDNAPPED_PARTICLES = self.KIDNAPPED_PARTICLES_LOW
         else:
             # If dbscan finds no cluster, need to find some point that works. Maybe at this point we increase # of random particles?
             estimate.position = Point(*[*positions[0], 0.0])
             estimate.orientation = orientations[0]
+            self.KIDNAPPED_PARTICLES = self.KIDNAPPED_PARTICLES_HIGH
 
         return estimate
 
