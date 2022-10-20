@@ -2,3 +2,5 @@ src/pf_localisation/__pycache__
 *.so
 .vscode
 src/laser_trace/*.sh
+*.csv
+*.bag
